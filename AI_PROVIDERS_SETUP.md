@@ -40,7 +40,7 @@ DEEPSEEK_MODEL=deepseek-chat
 Sudah aktif dengan API key yang ada:
 ```env
 AI_PROVIDER=gemini
-GEMINI_API_KEY=AIzaSyAFHrIRpik5MC-WZ5Y5DOx9epQzdixoBTg
+GEMINI_API_KEY=Axxxxxxx
 ```
 
 **Limits:**
