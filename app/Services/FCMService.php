@@ -17,12 +17,13 @@ class FCMService
         $this->projectId = env('FIREBASE_PROJECT_ID', 'mystudymate-acfbe');
         $this->fcmUrl = "https://fcm.googleapis.com/v1/projects/{$this->projectId}/messages:send";
         
-        // Try to load from JSON string first (for Laravel Cloud), then fall back to file
-        $credentialsJson = env('FIREBASE_CREDENTIALS_JSON');
-        if ($credentialsJson) {
+        // Try to load from base64 encoded string first (for Laravel Cloud), then fall back to file
+        $credentialsBase64 = env('FIREBASE_CREDENTIALS');
+        if ($credentialsBase64) {
+            $credentialsJson = base64_decode($credentialsBase64);
             $this->serviceAccountCredentials = json_decode($credentialsJson, true);
         } else {
-            $credentialsPath = env('FIREBASE_CREDENTIALS_PATH', storage_path('app/mystudymate-acfbe-firebase-adminsdk-fbsvc-2c2e8800a0.json'));
+            $credentialsPath = env('FIREBASE_CREDENTIALS_PATH', storage_path('app/mystudymate-acfbe-firebase-adminsdk-fbsvc-435c4c6bb6.json'));
             if (file_exists($credentialsPath)) {
                 $this->serviceAccountCredentials = json_decode(file_get_contents($credentialsPath), true);
             }
