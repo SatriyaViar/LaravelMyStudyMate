@@ -26,6 +26,109 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 // routes/api.php TEST
 Route::get('/test', fn() => response()->json(['message' => 'Laravel reachable!']));
 
+// Database connection test
+Route::get('/test-db', function () {
+    try {
+        $response = [
+            'status' => 'checking',
+            'timestamp' => now()->toDateTimeString(),
+            'tests' => []
+        ];
+        
+        // Test 1: Check if DB connection works
+        try {
+            $pdo = DB::connection()->getPdo();
+            $response['tests']['connection'] = [
+                'status' => 'success',
+                'message' => 'Database connection successful',
+                'driver' => DB::connection()->getDriverName()
+            ];
+        } catch (Exception $e) {
+            $response['tests']['connection'] = [
+                'status' => 'failed',
+                'message' => $e->getMessage()
+            ];
+            $response['status'] = 'failed';
+            return response()->json($response);
+        }
+        
+        // Test 2: Check tables exist
+        try {
+            $tables = DB::select("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
+            $tableNames = array_map(fn($t) => $t->table_name, $tables);
+            
+            $response['tests']['tables'] = [
+                'status' => 'success',
+                'count' => count($tableNames),
+                'tables' => $tableNames
+            ];
+        } catch (Exception $e) {
+            $response['tests']['tables'] = [
+                'status' => 'failed',
+                'message' => $e->getMessage()
+            ];
+        }
+        
+        // Test 3: Check migrations table
+        try {
+            $migrations = DB::table('migrations')->count();
+            $response['tests']['migrations'] = [
+                'status' => 'success',
+                'count' => $migrations
+            ];
+        } catch (Exception $e) {
+            $response['tests']['migrations'] = [
+                'status' => 'failed',
+                'message' => $e->getMessage()
+            ];
+        }
+        
+        // Test 4: Check users table
+        try {
+            $users = DB::table('users')->count();
+            $response['tests']['users'] = [
+                'status' => 'success',
+                'count' => $users
+            ];
+        } catch (Exception $e) {
+            $response['tests']['users'] = [
+                'status' => 'failed',
+                'message' => $e->getMessage()
+            ];
+        }
+        
+        // Test 5: Check database info
+        try {
+            $dbConfig = [
+                'connection' => config('database.default'),
+                'host' => config('database.connections.pgsql.host'),
+                'port' => config('database.connections.pgsql.port'),
+                'database' => config('database.connections.pgsql.database')
+            ];
+            $response['tests']['config'] = [
+                'status' => 'success',
+                'info' => $dbConfig
+            ];
+        } catch (Exception $e) {
+            $response['tests']['config'] = [
+                'status' => 'failed',
+                'message' => $e->getMessage()
+            ];
+        }
+        
+        $response['status'] = 'success';
+        return response()->json($response);
+        
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
+    }
+});
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout']);
