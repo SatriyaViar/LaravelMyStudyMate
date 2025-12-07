@@ -42,7 +42,7 @@ return [
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models'),
-        'model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
+        'model' => env('GEMINI_MODEL' ),
         'temperature' => env('GEMINI_TEMPERATURE', 0.7),
     ],
 
