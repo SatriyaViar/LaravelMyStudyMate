@@ -130,6 +130,25 @@ Route::get('/test-db', function () {
     }
 });
 
+Route::get('/test-ai', function () {
+    try {
+        $aiService = app(\App\Services\AIService::class);
+        $result = $aiService->generateQuiz('Laravel', 'easy', 2);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'AI Service working!',
+            'test_result' => $result
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});
+
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout']);
