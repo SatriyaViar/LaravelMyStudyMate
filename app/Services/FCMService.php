@@ -10,13 +10,23 @@ class FCMService
 {
     protected $projectId;
     protected $fcmUrl;
-    protected $serviceAccountPath;
+    protected $serviceAccountCredentials;
 
     public function __construct()
     {
-        $this->projectId = 'mystudymate-acfbe';
+        $this->projectId = env('FIREBASE_PROJECT_ID', 'mystudymate-acfbe');
         $this->fcmUrl = "https://fcm.googleapis.com/v1/projects/{$this->projectId}/messages:send";
-        $this->serviceAccountPath = storage_path('app/mystudymate-acfbe-firebase-adminsdk-fbsvc-2c2e8800a0.json');
+        
+        // Try to load from JSON string first (for Laravel Cloud), then fall back to file
+        $credentialsJson = env('FIREBASE_CREDENTIALS_JSON');
+        if ($credentialsJson) {
+            $this->serviceAccountCredentials = json_decode($credentialsJson, true);
+        } else {
+            $credentialsPath = env('FIREBASE_CREDENTIALS_PATH', storage_path('app/mystudymate-acfbe-firebase-adminsdk-fbsvc-2c2e8800a0.json'));
+            if (file_exists($credentialsPath)) {
+                $this->serviceAccountCredentials = json_decode(file_get_contents($credentialsPath), true);
+            }
+        }
     }
 
     /**
@@ -25,14 +35,14 @@ class FCMService
     private function getAccessToken()
     {
         try {
-            if (!file_exists($this->serviceAccountPath)) {
-                Log::error('FCM: Service account file not found', ['path' => $this->serviceAccountPath]);
+            if (!$this->serviceAccountCredentials) {
+                Log::error('FCM: Service account credentials not found');
                 return null;
             }
 
             $credentials = new ServiceAccountCredentials(
                 'https://www.googleapis.com/auth/firebase.messaging',
-                json_decode(file_get_contents($this->serviceAccountPath), true)
+                $this->serviceAccountCredentials
             );
 
             $token = $credentials->fetchAuthToken();
