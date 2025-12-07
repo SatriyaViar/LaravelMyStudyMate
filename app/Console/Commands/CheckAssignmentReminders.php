@@ -9,20 +9,8 @@ use Carbon\Carbon;
 
 class CheckAssignmentReminders extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'assignments:check-reminders';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Check and send assignment reminders (H-3, D-day, H+3)';
-
+    protected $description = 'Check and send assignment reminders (H-3, H-2, H-1, D-day, H+1, H+2, H+3)';
     protected $fcmService;
 
     public function __construct(FCMService $fcmService)
@@ -31,35 +19,89 @@ class CheckAssignmentReminders extends Command
         $this->fcmService = $fcmService;
     }
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
         $this->info('Checking assignment reminders...');
-        
+
         $now = Carbon::now('Asia/Jakarta');
         $today = $now->copy()->startOfDay();
-        
+
         // H-3 (3 days before deadline) - send at 08:00
-        if ($now->hour >= 8) {
+        if ($now->hour == 8 && $now->minute < 5) {
             $threeDaysBefore = $today->copy()->addDays(3);
-            $this->sendReminders($threeDaysBefore, 'h_minus_3', '⏰ Assignment Due in 3 Days!', 
-                'Don\'t forget: "{title}" is due in 3 days. Start working on it!');
+            $this->sendReminders(
+                $threeDaysBefore,
+                'h_minus_3',
+                '⏰ Assignment Due in 3 Days!',
+                'Don\'t forget: "{title}" is due in 3 days. Start working on it!'
+            );
         }
-        
+
+        // H-2 (2 days before deadline) - send at 08:00
+        if ($now->hour == 8 && $now->minute < 5) {
+            $twoDaysBefore = $today->copy()->addDays(2);
+            $this->sendReminders(
+                $twoDaysBefore,
+                'h_minus_2',
+                '⏰ Assignment Due in 2 Days!',
+                'Don\'t forget: "{title}" is due in 2 days. Keep working on it!'
+            );
+        }
+
+        // H-1 (1 day before deadline) - send at 08:00
+        if ($now->hour == 8 && $now->minute < 5) {
+            $oneDayBefore = $today->copy()->addDays(1);
+            $this->sendReminders(
+                $oneDayBefore,
+                'h_minus_1',
+                '⚠️ Assignment Due Tomorrow!',
+                'Reminder: "{title}" is due tomorrow! Make sure to complete it on time.'
+            );
+        }
+
         // D-day (deadline today) - send at 08:00
-        if ($now->hour >= 8) {
-            $this->sendReminders($today, 'd_day', '🔥 Assignment Due Today!', 
-                'Urgent: "{title}" is due today! Complete it before the deadline.');
+        if ($now->hour == 8 && $now->minute < 5) {
+            $this->sendReminders(
+                $today,
+                'd_day',
+                '🔥 Assignment Due Today!',
+                'Urgent: "{title}" is due today! Complete it before the deadline.'
+            );
         }
-        
+
+        // H+1 (1 day after deadline, if not done) - send at 09:00
+        if ($now->hour == 9 && $now->minute < 5) {
+            $oneDayAfter = $today->copy()->subDays(1);
+            $this->sendReminders(
+                $oneDayAfter,
+                'h_plus_1',
+                '❌ Assignment Overdue (1 Day)!',
+                '"{title}" is now 1 day overdue. Please submit as soon as possible!'
+            );
+        }
+
+        // H+2 (2 days after deadline, if not done) - send at 09:00
+        if ($now->hour == 9 && $now->minute < 5) {
+            $twoDaysAfter = $today->copy()->subDays(2);
+            $this->sendReminders(
+                $twoDaysAfter,
+                'h_plus_2',
+                '❌ Assignment Overdue (2 Days)!',
+                '"{title}" is now 2 days overdue. Please submit immediately!'
+            );
+        }
+
         // H+3 (3 days after deadline, if not done) - send at 09:00
-        if ($now->hour >= 9) {
+        if ($now->hour == 9 && $now->minute < 5) {
             $threeDaysAfter = $today->copy()->subDays(3);
-            $this->sendOverdueReminders($threeDaysAfter);
+            $this->sendReminders(
+                $threeDaysAfter,
+                'h_plus_3',
+                '🚨 Assignment Overdue (3 Days)!',
+                '"{title}" is now 3 days overdue. Please contact your instructor!'
+            );
         }
-        
+
         $this->info('Assignment reminders checked successfully!');
     }
 
@@ -70,18 +112,19 @@ class CheckAssignmentReminders extends Command
     {
         $assignments = Assignment::where('is_done', false)
             ->whereDate('deadline', $targetDate->toDateString())
-            ->where(function($query) use ($notificationType) {
+            ->where(function ($query) use ($notificationType) {
                 $query->whereNull('last_notification_type')
-                      ->orWhere('last_notification_type', '!=', $notificationType);
+                    ->orWhere('last_notification_type', '!=', $notificationType);
             })
             ->with('user')
             ->get();
 
         $sent = 0;
+
         foreach ($assignments as $assignment) {
             if ($assignment->user && $assignment->user->fcm_token) {
                 $body = str_replace('{title}', $assignment->title, $bodyTemplate);
-                
+
                 try {
                     $this->fcmService->sendNotification(
                         $assignment->user->fcm_token,
@@ -94,11 +137,11 @@ class CheckAssignmentReminders extends Command
                             'deadline' => $assignment->deadline->toIso8601String(),
                         ]
                     );
-                    
+
                     // Update last notification type
                     $assignment->last_notification_type = $notificationType;
                     $assignment->save();
-                    
+
                     $sent++;
                 } catch (\Exception $e) {
                     $this->error("Failed to send notification for assignment {$assignment->id}: " . $e->getMessage());
@@ -107,49 +150,5 @@ class CheckAssignmentReminders extends Command
         }
 
         $this->info("Sent {$sent} {$notificationType} reminders");
-    }
-
-    /**
-     * Send overdue reminders
-     */
-    private function sendOverdueReminders($targetDate)
-    {
-        $assignments = Assignment::where('is_done', false)
-            ->whereDate('deadline', $targetDate->toDateString())
-            ->where(function($query) {
-                $query->whereNull('last_notification_type')
-                      ->orWhere('last_notification_type', '!=', 'h_plus_3');
-            })
-            ->with('user')
-            ->get();
-
-        $sent = 0;
-        foreach ($assignments as $assignment) {
-            if ($assignment->user && $assignment->user->fcm_token) {
-                try {
-                    $this->fcmService->sendNotification(
-                        $assignment->user->fcm_token,
-                        '❗ Assignment Overdue!',
-                        "Assignment \"{$assignment->title}\" is 3 days overdue. Please complete it as soon as possible!",
-                        [
-                            'type' => 'assignment_reminder',
-                            'assignment_id' => (string) $assignment->id,
-                            'notification_type' => 'h_plus_3',
-                            'deadline' => $assignment->deadline->toIso8601String(),
-                        ]
-                    );
-                    
-                    // Update last notification type
-                    $assignment->last_notification_type = 'h_plus_3';
-                    $assignment->save();
-                    
-                    $sent++;
-                } catch (\Exception $e) {
-                    $this->error("Failed to send overdue notification for assignment {$assignment->id}: " . $e->getMessage());
-                }
-            }
-        }
-
-        $this->info("Sent {$sent} overdue (H+3) reminders");
     }
 }
