@@ -130,24 +130,97 @@ Route::get('/test-db', function () {
     }
 });
 
-Route::get('/test-ai', function () {
+Route::get('/test-gemini', function () {
     try {
-        $aiService = app(\App\Services\AIService::class);
-        $result = $aiService->generateQuiz('Laravel', 'easy', 2);
-        
-        return response()->json([
-            'status' => 'success',
-            'message' => 'AI Service working!',
-            'test_result' => $result
+        $apiKey = config('services.gemini.api_key');
+        $model = config('services.gemini.model', 'gemini-1.5-flash');
+        $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+
+        if (empty($apiKey)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'GEMINI_API_KEY not configured',
+            ], 500);
+        }
+
+        $data = [
+            'contents' => [
+                [
+                    'parts' => [
+                        [
+                            'text' => 'Generate 1 simple quiz question about Laravel in JSON format with structure: {"questions":[{"question_text":"...","answers":[{"answer_text":"...","is_correct":true/false}]}]}'
+                        ]
+                    ]
+                ]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 1000,
+            ]
+        ];
+
+        $ch = curl_init($endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
         ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'CURL Error',
+                'error' => $error,
+            ], 500);
+        }
+
+        if ($httpCode !== 200) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gemini API Error',
+                'http_code' => $httpCode,
+                'response' => json_decode($response, true),
+            ], $httpCode);
+        }
+
+        $result = json_decode($response, true);
+
+        if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
+            $generatedText = $result['candidates'][0]['content']['parts'][0]['text'];
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Gemini API is working!',
+                'model' => $model,
+                'api_key_prefix' => substr($apiKey, 0, 20) . '...',
+                'http_code' => $httpCode,
+                'generated_text' => $generatedText,
+                'full_response' => $result,
+            ]);
+        } else {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unexpected response format',
+                'response' => $result,
+            ], 500);
+        }
+
     } catch (\Exception $e) {
         return response()->json([
             'status' => 'error',
-            'message' => $e->getMessage()
+            'message' => 'Exception occurred',
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
         ], 500);
     }
 });
-
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
