@@ -2,6 +2,8 @@
 // Test Database Connection for Production
 // URL: https://laravelmystudymate-main-2ftdg6.laravel.cloud/test-db.php
 
+use Illuminate\Support\Facades\DB;
+
 header('Content-Type: application/json');
 
 try {
